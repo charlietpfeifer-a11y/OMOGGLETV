@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Flash Booth</title>
+<style>
+  :root {
+    --ground: #f6f1e6;
+    --surface: #fffaf3;
+    --surface-2: #f1e9d8;
+    --border: #ddd0ba;
+    --ink: #241b12;
+    --muted: #8a7960;
+    --accent: #e8632a;
+    --accent-ink: #fff6ee;
+    --accent2: #2f9d84;
+    --shadow: 0 18px 40px -20px rgba(36, 27, 18, 0.35);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #17130f;
+      --surface: #211b16;
+      --surface-2: #2a231c;
+      --border: #3a2f26;
+      --ink: #f3ead9;
+      --muted: #9c8b76;
+      --accent: #ff7a3d;
+      --accent-ink: #241205;
+      --accent2: #5ecfb1;
+      --shadow: 0 20px 50px -18px rgba(0, 0, 0, 0.6);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #17130f;
+    --surface: #211b16;
+    --surface-2: #2a231c;
+    --border: #3a2f26;
+    --ink: #f3ead9;
+    --muted: #9c8b76;
+    --accent: #ff7a3d;
+    --accent-ink: #241205;
+    --accent2: #5ecfb1;
+    --shadow: 0 20px 50px -18px rgba(0, 0, 0, 0.6);
+  }
+
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: 'Work Sans', system-ui, sans-serif;
+    min-height: 100%;
+  }
+  body {
+    display: flex;
+    justify-content: center;
+    padding: 48px 20px 64px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+  }
+
+  .stage {
+    width: 100%;
+    max-width: 420px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 22px;
+  }
+
+  .eyebrow {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--muted);
+    text-align: center;
+  }
+  h1 {
+    font-family: 'Fraunces', Georgia, serif;
+    font-optical-sizing: auto;
+    font-weight: 600;
+    font-size: 30px;
+    text-align: center;
+    text-wrap: balance;
+    margin: 0;
+    letter-spacing: -0.01em;
+  }
+  h1 em {
+    color: var(--accent);
+    font-style: italic;
+  }
+
+  /* ── Stats strip ──────────────────────────────────────────── */
+  .stats-strip {
+    display: flex; width: 100%;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    overflow: hidden;
+  }
+  .stat { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px;
+    padding: 10px 6px; border-right: 1px solid var(--border); }
+  .stat:last-child { border-right: none; }
+  .stat-label { font-family: 'Space Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--muted); }
+  .stat-value { font-family: 'Fraunces', Georgia, serif; font-weight: 600; font-size: 17px; }
+
+  /* ── Camera body ─────────────────────────────────────────── */
+  .camera {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    padding: 16px;
+    box-shadow: var(--shadow);
+  }
+
+  .viewfinder {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    background: #000;
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  video { width: 100%; height: 100%; object-fit: cover; display: block; transform: scaleX(-1); }
+  .vignette {
+    position: absolute; inset: 0; pointer-events: none;
+    background: radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.55) 100%);
+  }
+  .bracket {
+    position: absolute; width: 26px; height: 26px;
+    border-color: var(--accent2); opacity: 0.85;
+  }
+  .bracket.tl { top: 10px; left: 10px; border-top: 2px solid; border-left: 2px solid; border-radius: 4px 0 0 0; }
+  .bracket.tr { top: 10px; right: 10px; border-top: 2px solid; border-right: 2px solid; border-radius: 0 4px 0 0; }
+  .bracket.bl { bottom: 10px; left: 10px; border-bottom: 2px solid; border-left: 2px solid; border-radius: 0 0 0 4px; }
+  .bracket.br { bottom: 10px; right: 10px; border-bottom: 2px solid; border-right: 2px solid; border-radius: 0 0 4px 0; }
+
+  .flash {
+    position: absolute; inset: 0; background: #fff; opacity: 0;
+    pointer-events: none;
+  }
+  .flash.pop { animation: flashpop 420ms ease-out; }
+  @keyframes flashpop {
+    0% { opacity: 0; }
+    12% { opacity: 0.95; }
+    100% { opacity: 0; }
+  }
+
+  .lens-cap {
+    position: absolute; inset: 0; z-index: 3;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+    background: linear-gradient(180deg, var(--surface) 0%, var(--surface-2) 100%);
+    transition: opacity 380ms ease;
+  }
+  .lens-cap.hidden { opacity: 0; pointer-events: none; }
+  .lens-ring {
+    width: 52px; height: 52px; border-radius: 50%;
+    border: 2px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .lens-ring::after {
+    content: ''; width: 24px; height: 24px; border-radius: 50%; background: var(--surface-2);
+    border: 2px solid var(--accent2);
+  }
+  .cam-toggle {
+    font-family: 'Space Mono', monospace; font-size: 13px; letter-spacing: 0.04em;
+    background: var(--accent); color: var(--accent-ink); border: none; border-radius: 999px;
+    padding: 12px 24px; cursor: pointer;
+    transition: transform 0.12s ease, opacity 0.15s ease;
+  }
+  .cam-toggle:hover:not(:disabled) { opacity: 0.9; }
+  .cam-toggle:active:not(:disabled) { transform: scale(0.96); }
+  .cam-toggle:disabled { opacity: 0.5; cursor: not-allowed; }
+  .cam-hint {
+    font-family: 'Space Mono', monospace; font-size: 11px; letter-spacing: 0.03em;
+    color: var(--muted); text-align: center; max-width: 24ch;
+  }
+  .cam-hint.error { color: #d9634a; }
+
+  .readout {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-top: 12px; padding: 0 2px;
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .readout .rec { display: flex; align-items: center; gap: 6px; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+  .dot.live { background: var(--accent2); animation: pulse 1.6s ease-in-out infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+  .status.error { color: #d9634a; }
+
+  /* ── Shutter ──────────────────────────────────────────────── */
+  .shutter-row { display: flex; justify-content: center; margin-top: 18px; }
+  .shutter {
+    width: 76px; height: 76px; border-radius: 50%;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    transition: transform 0.12s ease, box-shadow 0.15s ease;
+    position: relative;
+  }
+  .shutter::before {
+    content: '';
+    width: 56px; height: 56px; border-radius: 50%;
+    border: 2px solid var(--accent2);
+    opacity: 0.55;
+  }
+  .shutter::after {
+    content: '';
+    position: absolute; width: 40px; height: 40px; border-radius: 50%;
+    background: var(--accent);
+  }
+  .shutter:hover:not(:disabled) { transform: scale(1.04); }
+  .shutter:active:not(:disabled) { transform: scale(0.94); }
+  .shutter:disabled { opacity: 0.35; cursor: not-allowed; }
+
+  .caption {
+    text-align: center; margin-top: 10px;
+    font-family: 'Space Mono', monospace;
+    font-size: 11px; color: var(--muted); letter-spacing: 0.04em;
+  }
+
+  /* ── Instant photo result ─────────────────────────────────── */
+  .print-wrap {
+    width: 100%;
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 620ms cubic-bezier(.2,.8,.2,1);
+  }
+  .print-wrap.shown { max-height: 460px; }
+
+  .print {
+    margin-top: 4px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px 4px 14px 14px;
+    box-shadow: var(--shadow);
+    padding: 22px 22px 18px;
+    position: relative;
+    transform: translateY(-14px);
+    opacity: 0;
+    transition: transform 560ms cubic-bezier(.2,.8,.2,1), opacity 460ms ease;
+  }
+  .print-wrap.shown .print { transform: translateY(0); opacity: 1; }
+  .perf {
+    position: absolute; top: -1px; left: 0; right: 0; height: 10px;
+    background-image: radial-gradient(circle, var(--ground) 2.4px, transparent 2.6px);
+    background-size: 16px 10px; background-repeat: repeat-x; background-position: 6px 0;
+  }
+
+  .score-row { display: flex; align-items: baseline; justify-content: center; gap: 6px; }
+  .score-num {
+    font-family: 'Fraunces', Georgia, serif;
+    font-weight: 600; font-size: 64px; line-height: 1; letter-spacing: -0.02em;
+  }
+  .score-den {
+    font-family: 'Space Mono', monospace;
+    font-size: 16px; color: var(--muted);
+  }
+  .stars {
+    text-align: center; font-family: 'Space Mono', monospace;
+    font-size: 18px; letter-spacing: 3px; margin-top: 6px; color: var(--accent2);
+  }
+  .score-label {
+    text-align: center; font-family: 'Fraunces', Georgia, serif; font-style: italic;
+    font-size: 18px; margin-top: 10px;
+  }
+  .score-message {
+    text-align: center; color: var(--muted); font-size: 13.5px; margin-top: 4px; max-width: 34ch;
+    margin-left: auto; margin-right: auto;
+  }
+  .frame-meta {
+    display: flex; justify-content: space-between; margin-top: 16px;
+    font-family: 'Space Mono', monospace; font-size: 10.5px; color: var(--muted);
+    border-top: 1px dashed var(--border); padding-top: 10px;
+  }
+  .new-best {
+    color: var(--accent); font-weight: 700;
+  }
+
+  .again-row { display: flex; justify-content: center; margin-top: 16px; }
+  .again {
+    font-family: 'Space Mono', monospace; font-size: 12px; letter-spacing: 0.04em;
+    background: transparent; border: 1px solid var(--border); color: var(--ink);
+    border-radius: 999px; padding: 9px 18px; cursor: pointer;
+    transition: border-color 0.15s ease, color 0.15s ease;
+  }
+  .again:hover { border-color: var(--accent2); color: var(--accent2); }
+
+  .privacy {
+    display: flex; align-items: flex-start; gap: 8px;
+    color: var(--muted); font-size: 11.5px; line-height: 1.5;
+    max-width: 34ch; text-align: center; margin: 0 auto;
+  }
+  .disclaimer {
+    color: var(--muted); font-size: 11px; line-height: 1.6; text-align: center;
+    max-width: 36ch; margin: 0 auto;
+  }
+  .disclaimer b { color: var(--ink); }
+</style>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;1,9..144,500&family=Work+Sans:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+</head>
+<body>
+
+<div class="stage">
+  <div>
+    <div class="eyebrow">Frame one. No filter.</div>
+    <h1>Step into the <em>Flash Booth</em></h1>
+  </div>
+
+  <div class="stats-strip">
+    <div class="stat"><span class="stat-label">Rank</span><span class="stat-value" id="rankValue">First Timer</span></div>
+    <div class="stat"><span class="stat-label">Frames</span><span class="stat-value" id="framesValue">0</span></div>
+    <div class="stat"><span class="stat-label">Best</span><span class="stat-value" id="bestValue">—</span></div>
+  </div>
+
+  <div class="camera">
+    <div class="viewfinder">
+      <video id="video" autoplay playsinline muted></video>
+      <div class="vignette"></div>
+      <div class="bracket tl"></div>
+      <div class="bracket tr"></div>
+      <div class="bracket bl"></div>
+      <div class="bracket br"></div>
+      <div class="flash" id="flash"></div>
+      <div class="lens-cap" id="lensCap">
+        <div class="lens-ring"></div>
+        <button class="cam-toggle" id="camOnBtn">turn camera on</button>
+        <div class="cam-hint" id="camHint">click to start the viewfinder</div>
+      </div>
+    </div>
+    <div class="readout">
+      <span class="rec"><span class="dot" id="recDot"></span><span id="status">camera off</span></span>
+      <span id="clock">00:00</span>
+    </div>
+    <div class="shutter-row">
+      <button class="shutter" id="shutterBtn" disabled aria-label="Take photo"></button>
+    </div>
+    <div class="caption">press the shutter when you're ready</div>
+  </div>
+
+  <div class="print-wrap" id="printWrap">
+    <div class="print">
+      <div class="perf"></div>
+      <div class="score-row">
+        <span class="score-num" id="scoreNum" style="color: var(--accent)">–</span>
+        <span class="score-den">/ 10</span>
+      </div>
+      <div class="stars" id="stars"></div>
+      <div class="score-label" id="scoreLabel"></div>
+      <div class="score-message" id="scoreMessage"></div>
+      <div class="frame-meta">
+        <span id="frameId">FRAME 001</span>
+        <span id="frameBest"></span>
+        <span id="frameTime"></span>
+      </div>
+    </div>
+    <div class="again-row">
+      <button class="again" id="againBtn">develop another</button>
+    </div>
+  </div>
+
+  <div class="privacy">🔒 The photo never leaves this tab — captured to a canvas, scored, then discarded.</div>
+
+  <div class="disclaimer">
+    <b>Souvenir, not science.</b> This isn't a real attractiveness AI — those are unreliable and
+    encode ugly biases, so this one doesn't try. The score comes from lighting, symmetry, and
+    contrast in the pixels, plus a roll of the dice. You are not a number.
+  </div>
+</div>
+
+<script>
+(() => {
+  const video = document.getElementById('video');
+  const statusEl = document.getElementById('status');
+  const recDot = document.getElementById('recDot');
+  const clockEl = document.getElementById('clock');
+  const shutterBtn = document.getElementById('shutterBtn');
+  const flashEl = document.getElementById('flash');
+  const printWrap = document.getElementById('printWrap');
+  const scoreNum = document.getElementById('scoreNum');
+  const starsEl = document.getElementById('stars');
+  const scoreLabel = document.getElementById('scoreLabel');
+  const scoreMessage = document.getElementById('scoreMessage');
+  const frameIdEl = document.getElementById('frameId');
+  const frameTimeEl = document.getElementById('frameTime');
+  const againBtn = document.getElementById('againBtn');
+  const lensCap = document.getElementById('lensCap');
+  const camOnBtn = document.getElementById('camOnBtn');
+  const camHint = document.getElementById('camHint');
+  const rankValueEl = document.getElementById('rankValue');
+  const framesValueEl = document.getElementById('framesValue');
+  const bestValueEl = document.getElementById('bestValue');
+  const frameBestEl = document.getElementById('frameBest');
+
+  let stream = null;
+  let frameCount = 0;
+  let startedAt = null;
+  let clockTimer = null;
+
+  // ── Session stats (rank + personal best), saved on this device only ──
+  const STATS_KEY = 'flashBoothStats_v1';
+  function loadStats() {
+    try {
+      const raw = localStorage.getItem(STATS_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch (e) {}
+    return { frames: 0, best: null };
+  }
+  function saveStats() {
+    try { localStorage.setItem(STATS_KEY, JSON.stringify(stats)); } catch (e) {}
+  }
+  function rankForFrames(n) {
+    if (n >= 25) return 'Booth Legend';
+    if (n >= 12) return 'Studio Pro';
+    if (n >= 6)  return 'Shutterbug';
+    if (n >= 3)  return 'Regular';
+    if (n >= 1)  return 'Rookie';
+    return 'First Timer';
+  }
+  function renderStats() {
+    rankValueEl.textContent = rankForFrames(stats.frames);
+    framesValueEl.textContent = String(stats.frames);
+    bestValueEl.textContent = stats.best == null ? '—' : stats.best.toFixed(1);
+  }
+  const stats = loadStats();
+  renderStats();
+
+  function pad(n) { return String(n).padStart(2, '0'); }
+  function tickClock() {
+    if (!startedAt) return;
+    const s = Math.floor((Date.now() - startedAt) / 1000);
+    clockEl.textContent = `${pad(Math.floor(s / 60))}:${pad(s % 60)}`;
+  }
+
+  async function startCamera() {
+    camOnBtn.disabled = true;
+    camHint.textContent = 'requesting access…';
+    camHint.classList.remove('error');
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
+      video.srcObject = stream;
+      await video.play();
+      statusEl.textContent = 'viewfinder live';
+      statusEl.classList.remove('error');
+      recDot.classList.add('live');
+      shutterBtn.disabled = false;
+      startedAt = Date.now();
+      clockTimer = setInterval(tickClock, 1000);
+      lensCap.classList.add('hidden');
+    } catch (err) {
+      camHint.textContent = 'camera blocked — check browser permissions and try again';
+      camHint.classList.add('error');
+      camOnBtn.disabled = false;
+      camOnBtn.textContent = 'try again';
+    }
+  }
+
+  camOnBtn.addEventListener('click', startCamera);
+
+  const hidden = document.createElement('canvas');
+
+  function analyzeFrame() {
+    const w = 160, h = 120;
+    hidden.width = w; hidden.height = h;
+    const ctx = hidden.getContext('2d');
+    ctx.save();
+    ctx.translate(w, 0);
+    ctx.scale(-1, 1);
+    ctx.drawImage(video, 0, 0, w, h);
+    ctx.restore();
+
+    const { data } = ctx.getImageData(0, 0, w, h);
+    const gray = new Float32Array(w * h);
+    let sum = 0;
+    for (let i = 0, p = 0; i < data.length; i += 4, p++) {
+      const g = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+      gray[p] = g;
+      sum += g;
+    }
+    const mean = sum / gray.length;
+
+    let variance = 0;
+    for (let p = 0; p < gray.length; p++) variance += (gray[p] - mean) ** 2;
+    const stdDev = Math.sqrt(variance / gray.length);
+
+    let symDiff = 0, symCount = 0;
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w / 2; x++) {
+        const left = gray[y * w + x];
+        const right = gray[y * w + (w - 1 - x)];
+        symDiff += Math.abs(left - right);
+        symCount++;
+      }
+    }
+    const symmetryScore = 1 - Math.min(1, (symDiff / symCount) / 60);
+    const lightingScore = 1 - Math.min(1, Math.abs(mean - 130) / 130);
+    const contrastScore = 1 - Math.min(1, Math.abs(stdDev - 45) / 45);
+
+    const base = symmetryScore * 0.4 + lightingScore * 0.35 + contrastScore * 0.25;
+    const jitter = (Math.random() - 0.5) * 1.2;
+    let score = 5.8 + base * 4.0 + jitter;
+    score = Math.max(1, Math.min(10, score));
+    return Math.round(score * 10) / 10;
+  }
+
+  // Ten named tiers spanning the 1-10 range. Ordered low to high; colors ramp
+  // from a muted warm tone up through teal, ending on the accent for a perfect frame.
+  const levels = [
+    { max: 1,    name: 'double exposure mishap', color: '#8a5c4a', message: 'Even the light was confused this time.' },
+    { max: 2,    name: 'underexposed',           color: '#9c5a41', message: 'A little dim — the booth barely caught you.' },
+    { max: 3,    name: 'needs a retake',         color: '#b06238', message: 'Not quite it. The lens says try again.' },
+    { max: 4,    name: 'slightly soft focus',    color: '#c1753a', message: 'Close, but the frame lost some sharpness.' },
+    { max: 5,    name: 'passable proof sheet',   color: '#c98a3a', message: 'A fine proof — nothing wrong with fine.' },
+    { max: 6,    name: 'solid contact sheet',    color: '#b3974a', message: 'Decent light, decent angle. Solid work.' },
+    { max: 7,    name: 'worth a reprint',        color: '#8ea25a', message: 'This one earns a second look.' },
+    { max: 8,    name: 'print-worthy',           color: '#5fa27a', message: 'Nice symmetry, nice light — a keeper.' },
+    { max: 9,    name: 'darkroom favorite',      color: '#2f9d84', message: 'The booth is playing favorites with this frame.' },
+    { max: 10.1, name: 'gallery wall material',  color: '#e8632a', message: 'Whoa — even exposure, sharp symmetry, full marks.' },
+  ];
+  function levelFor(score) {
+    return levels.find(l => score <= l.max) || levels[levels.length - 1];
+  }
+
+  function showResult(score) {
+    frameCount += 1;
+    const lvl = levelFor(score);
+    scoreNum.textContent = score.toFixed(1);
+    scoreNum.style.color = lvl.color;
+    const full = Math.round(score / 2);
+    starsEl.textContent = '✦'.repeat(full) + '✧'.repeat(5 - full);
+    scoreLabel.textContent = lvl.name;
+    scoreMessage.textContent = lvl.message;
+    frameIdEl.textContent = `FRAME ${String(frameCount).padStart(3, '0')}`;
+    frameTimeEl.textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    const isNewBest = stats.best == null || score > stats.best;
+    stats.frames += 1;
+    if (isNewBest) stats.best = score;
+    saveStats();
+    renderStats();
+    frameBestEl.textContent = isNewBest ? 'NEW BEST' : '';
+    frameBestEl.className = isNewBest ? 'new-best' : '';
+
+    printWrap.classList.add('shown');
+  }
+
+  shutterBtn.addEventListener('click', () => {
+    if (!stream) return;
+    shutterBtn.disabled = true;
+    flashEl.classList.remove('pop');
+    void flashEl.offsetWidth;
+    flashEl.classList.add('pop');
+    statusEl.textContent = 'developing…';
+    setTimeout(() => {
+      const score = analyzeFrame();
+      showResult(score);
+      statusEl.textContent = 'viewfinder live';
+      shutterBtn.disabled = false;
+    }, 480);
+  });
+
+  againBtn.addEventListener('click', () => shutterBtn.click());
+})();
+</script>
+</body>
+</html>
